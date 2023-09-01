@@ -49,12 +49,12 @@ class LinearRegression:
         else:
             self.l1_coef = 0.
             self.l2_coef = 0.
-    
-    def __str__(self) -> str:
-        return f"MyLineReg class: n_iter={self.n_iter}, learning_rate={self.learning_rate}"
 
     def __repr__(self) -> str:
-        return self.__str__()
+        class_name = type(self).__name__
+        return f"{class_name}(n_iter={self.n_iter}, learning_rate={self.learning_rate}, metric={self.metric}, "\
+               f"reg={self.reg}, l1_coef={self.l1_coef}, l2_coef={self.l2_coef}, "\
+               f"sgd_sample={self.sgd_sample}, random_state={self.random_state})"
     
     def _mse(self, y_p: np.ndarray, y: np.ndarray) -> float:
         """Return mean sqared error (MSE) with regularization since this metric used as a loss function
