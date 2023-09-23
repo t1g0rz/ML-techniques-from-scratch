@@ -1,8 +1,8 @@
-from typing import Union, Optional, Callable
+import random
+from typing import Callable, Optional, Union
 
 import numpy as np
 import pandas as pd
-import random
 
 
 class LogisticRegression:
@@ -148,7 +148,8 @@ class LogisticRegression:
         Parameters:
             X (Union[np.ndarray, pd.DataFrame]): Feature matrix.
             y (np.ndarray): True labels.
-            verbose (int, optional): Interval for printing training progress. If set to 0, no progress will be printed. Defaults to 0.
+            verbose (int, optional): Interval for printing training progress. If set to 0, no progress will be printed. 
+            Defaults to 0.
 
         Raises:
             AssertionError: If input shapes are inconsistent.
