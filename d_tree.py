@@ -1,8 +1,6 @@
 import pandas as pd
 import numpy as np
 from typing import Union, Optional
-# TODO: leafs -> leaves
-# TODO: add leaves count
 
 
 class Leaf:
@@ -50,13 +48,14 @@ class MyTreeClf:
     def __init__(self, max_depth: int = 5, min_samples_split: int = 2, max_leafs: int = 20):
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
-        self.max_leafs = max_leafs
-        self.leafs_cnt = 0
+        self.max_leaves = max_leafs if max_leafs >= 2 else 2
+        self.leaves_cnt = 0
+        self._splits_cnt = 1  # imply that root should be in any case
         self.tree: Optional[TreeNode] = None
 
     def __str__(self) -> str:
         return f"MyTreeClf class: max_depth={self.max_depth}, min_samples_split={self.min_samples_split}, "\
-               f"max_leafs={self.max_leafs}"
+               f"max_leafs={self.max_leaves}"
 
     @staticmethod
     def _calculate_entropy(y: pd.Series) -> float:
@@ -67,6 +66,7 @@ class MyTreeClf:
         s0 = self._calculate_entropy(y)
         N = len(y)
         if len(y.value_counts()) == 1:
+            self.leaves_cnt += 1
             return Leaf(float(y.iloc[0]))
         col_name, split_value, ig = '', float('-inf'), 0
 
@@ -86,16 +86,38 @@ class MyTreeClf:
         flt = X[node.col_name] <= node.split_value
         X_l, y_l = X[flt], y[flt]
         X_r, y_r = X[~flt], y[~flt]
-        if depth >= self.max_depth:
-            node.left = Leaf(y_l.sum() / len(y_l))
-            node.right = Leaf(y_r.sum() / len(y_r))
+        if depth >= self.max_depth or self._splits_cnt + 1 == self.max_leaves:
+            self.leaves_cnt += 2
+            node.left = Leaf(y_l.mean())
+            node.right = Leaf(y_r.mean())
         else:
-            node.left = self._get_best_split(X_l, y_l)
+            if len(y_l) < self.min_samples_split or self._splits_cnt + 1 == self.max_leaves:
+                self.leaves_cnt += 1
+                node.left = Leaf(y_l.mean())
+            else:
+                node.left = self._get_best_split(X_l, y_l)
             if isinstance(node.left, TreeNode):
+                self._splits_cnt += 1
                 self._build_tree(X_l, y_l, node.left, depth + 1)
-            node.right = self._get_best_split(X_r, y_r)
+
+            if len(y_r) < self.min_samples_split or self._splits_cnt + 1 == self.max_leaves:
+                self.leaves_cnt += 1
+                node.right = Leaf(y_r.mean())
+            else:
+                node.right = self._get_best_split(X_r, y_r)
             if isinstance(node.right, TreeNode):
+                self._splits_cnt += 1
                 self._build_tree(X_r, y_r, node.right, depth + 1)
+
+    def _traverse_tree(self, row: pd.Series) -> float:
+        node = self.tree
+        while isinstance(node, TreeNode):
+            if row[node.col_name] > node.split_value:
+                node = node.right
+            else:
+                node = node.left
+
+        return node.value
 
     def print_tree(self) -> None:
         print(self.tree)
@@ -103,3 +125,29 @@ class MyTreeClf:
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         self.tree = self._get_best_split(X, y)
         self._build_tree(X, y, self.tree, depth=1)
+
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        y_pred = self.predict_proba(X)
+        flt = y_pred > 0.5
+        y_pred.loc[flt] = 1
+        y_pred.loc[~flt] = 0
+        return y_pred.astype(int)
+
+    def predict_proba(self, X: pd.DataFrame) -> pd.Series:
+        return X.apply(self._traverse_tree, axis=1)
+
+
+if __name__ == '__main__':
+    df = pd.read_csv('https://archive.ics.uci.edu/static/public/267/banknote+authentication.zip', header=None)
+    df.columns = ['variance', 'skewness', 'kurtosis', 'entropy', 'target']
+    X, y = df.iloc[:, :4], df['target']
+    X_train = X.sample(int(len(X) * 0.8), random_state=41)
+    y_train = y.loc[X_train.index]
+    flt = ~X.index.isin(X_train.index)
+    y_test = y.loc[flt]
+    X_test = X.loc[flt]
+    t = MyTreeClf(max_depth=5, min_samples_split=5, max_leafs=20)
+    t.fit(X, y)
+    t.print_tree()
+
+    print("Prediction quality\n", pd.concat([t.predict(X_test).rename('pred'), y_test], axis=1).corr())
